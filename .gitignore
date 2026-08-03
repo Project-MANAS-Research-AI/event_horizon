@@ -1,0 +1,27 @@
+# Python byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.venv/
+env/
+venv/
+
+# Pytest / Cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Manim render cache (the final README GIF lives in docs/assets/)
+media/
+
+# Distribution / Build
+build/
+dist/
+*.egg-info/
+
+# OS / Editor junk
+.DS_Store
+.vscode/
+.idea/

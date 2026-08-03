@@ -1,0 +1,54 @@
+"diagnostic-01":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/event_horizon/tensor_alignment.py"
+
+"diagnostic-02":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/event_horizon/batch_flux.py"
+
+"diagnostic-03":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/event_horizon/phase_desync.py"
+
+"diagnostic-04":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/event_horizon/field_stress.py"
+
+"dataset":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/event_horizon/dataset.py"
+          - "src/event_horizon/utils.py"
+
+"tests":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tests/**"
+
+"docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "README.md"
+          - "REPORT.md"
+
+"animation":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "animations/**"
+          - "docs/assets/**"
+
+"dependencies":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "pyproject.toml"
+          - "uv.lock"
+
+"ci":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+

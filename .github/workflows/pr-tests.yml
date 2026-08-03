@@ -1,0 +1,36 @@
+name: PR Challenge Tests
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  challenge-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Fetch held-out challenge tests
+        run: |
+          git fetch origin tests:refs/remotes/origin/tests
+          git checkout origin/tests -- tests/test_pr.py
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Install project
+        run: uv sync --locked --dev
+
+      - name: Run complete test suite
+        run: uv run --frozen pytest -q
+
