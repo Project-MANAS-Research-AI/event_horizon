@@ -1,0 +1,95 @@
+name: PR Policy
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate pull request scope
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const pull = context.payload.pull_request;
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pull.number,
+              per_page: 100,
+            });
+
+            const paths = files.map((file) => file.filename);
+            const labels = new Set(pull.labels.map((label) => label.name));
+            const author = pull.user.login;
+            const isDependabot = author === "dependabot[bot]";
+
+            const protectedPaths = paths.filter((path) =>
+              path.startsWith(".github/") ||
+              path.startsWith("tests/") ||
+              path === "pyproject.toml" ||
+              path === "uv.lock" ||
+              path === "src/event_horizon/dataset.py" ||
+              path === "src/event_horizon/utils.py" ||
+              path === "src/event_horizon/cli.py"
+            );
+
+            if (
+              protectedPaths.length > 0 &&
+              !isDependabot &&
+              !labels.has("infrastructure-approved")
+            ) {
+              await core.summary
+                .addHeading("Protected files changed")
+                .addRaw(
+                  "Candidates are not allowed to modify the following files:"
+                )
+                .addList(protectedPaths)
+                .addRaw(
+                  "Restore these files from the base branch and push the correction."
+                )
+                .write();
+              core.setFailed(
+                "You changed files that candidates are not allowed to modify: " +
+                `${protectedPaths.join(", ")}. Restore them from the base branch. ` +
+                "Only a maintainer can authorize these changes with the " +
+                "infrastructure-approved label."
+              );
+              return;
+            }
+
+            const challengePaths = paths.filter((path) =>
+              path.startsWith("src/event_horizon/") || path === "REPORT.md"
+            );
+            const titleAndBody = `${pull.title}\n${pull.body || ""}`;
+            const referencedIssues = new Set(
+              [...titleAndBody.matchAll(/(?:#|issues\/)([1-4])\b/g)].map(
+                (match) => Number(match[1])
+              )
+            );
+
+            if (
+              challengePaths.length > 0 &&
+              !isDependabot &&
+              referencedIssues.size === 0
+            ) {
+              core.setFailed(
+                "Challenge code changed without referencing Issue #1, #2, " +
+                "#3, or #4 in the PR title or description."
+              );
+              return;
+            }
+
+            core.info(`Validated ${paths.length} changed file(s) from ${author}.`);
+            if (referencedIssues.size > 0) {
+              core.info(
+                `Referenced diagnostic issue(s): ${[...referencedIssues]
+                  .sort()
+                  .join(", ")}`
+              );
+            }

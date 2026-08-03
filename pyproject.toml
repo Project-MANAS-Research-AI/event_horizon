@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "event-horizon-lab"
+version = "0.1.0"
+description = "Project Event Horizon: Anomaly Diagnostics AI Recruitment Challenge"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.24.0",
+    "matplotlib>=3.7.0",
+]
+
+[project.scripts]
+event-horizon = "event_horizon.cli:main"
+audit = "event_horizon.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+]
+animation = [
+    "manim>=0.20.1; python_version >= '3.11'",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/event_horizon"]

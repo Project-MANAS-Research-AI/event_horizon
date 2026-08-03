@@ -1,0 +1,155 @@
+name: PR Challenge Tests
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  challenge-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Fetch held-out challenge tests
+        run: |
+          git fetch origin tests:refs/remotes/origin/tests
+          git checkout origin/tests -- tests/test_pr.py
+
+      - name: Select challenge tests
+        id: select-tests
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+
+          with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as event_file:
+              event = json.load(event_file)
+
+          pull_request = event["pull_request"]
+          title_and_body = "\n".join(
+              value or ""
+              for value in (pull_request.get("title"), pull_request.get("body"))
+          )
+          referenced = {
+              int(match)
+              for match in re.findall(r"(?:#|issues/)([1-4])\b", title_and_body)
+          }
+
+          changed_files = subprocess.check_output(
+              [
+                  "git",
+                  "diff",
+                  "--name-only",
+                  f"{pull_request['base']['sha']}...{pull_request['head']['sha']}",
+              ],
+              text=True,
+          ).splitlines()
+
+          author = pull_request["user"]["login"]
+          labels = {label["name"] for label in pull_request.get("labels", [])}
+          protected_paths = [
+              path
+              for path in changed_files
+              if path.startswith((".github/", "tests/"))
+              or path
+              in {
+                  "pyproject.toml",
+                  "uv.lock",
+                  "src/event_horizon/dataset.py",
+                  "src/event_horizon/utils.py",
+                  "src/event_horizon/cli.py",
+              }
+          ]
+          if (
+              protected_paths
+              and author != "dependabot[bot]"
+              and "infrastructure-approved" not in labels
+          ):
+              raise SystemExit(
+                  "You changed files that candidates are not allowed to modify: "
+                  + ", ".join(protected_paths)
+                  + ". Restore them from the base branch. Only a maintainer can "
+                  "authorize these changes with the infrastructure-approved label."
+              )
+
+          diagnostic_paths = {
+              "src/event_horizon/tensor_alignment.py": {1},
+              "src/event_horizon/batch_flux.py": {2},
+              "src/event_horizon/phase_desync.py": {3},
+              "src/event_horizon/field_stress.py": {4},
+              "REPORT.md": {4},
+              "src/event_horizon/dataset.py": {1, 2, 3, 4},
+              "src/event_horizon/utils.py": {1, 2, 3, 4},
+              "src/event_horizon/cli.py": {1, 2, 3, 4},
+          }
+          affected = set()
+          for path in changed_files:
+              affected.update(diagnostic_paths.get(path, set()))
+
+          challenge_paths = [
+              path
+              for path in changed_files
+              if path.startswith("src/event_horizon/") or path == "REPORT.md"
+          ]
+
+          if challenge_paths and not referenced and author != "dependabot[bot]":
+              raise SystemExit(
+                  "Challenge code changed without referencing Issue #1, #2, #3, "
+                  "or #4 in the PR title/body. Changed paths: "
+                  + ", ".join(challenge_paths)
+              )
+
+          if affected and not referenced:
+              paths = ", ".join(
+                  path for path in changed_files if path in diagnostic_paths
+              )
+              raise SystemExit(
+                  "Diagnostic code changed without referencing Issue #1, #2, #3, "
+                  f"or #4 in the PR title/body. Changed diagnostic paths: {paths}"
+              )
+
+          selected = referenced | affected
+          node_ids = {
+              1: "tests/test_pr.py::test_diagnostic_01_trains_with_aligned_output_weights",
+              2: "tests/test_pr.py::test_diagnostic_02_gradient_scale_is_batch_size_invariant",
+              3: "tests/test_pr.py::test_diagnostic_03_uses_relu_consistently_and_converges",
+              4: "tests/test_pr.py::test_diagnostic_04_prunes_all_dead_neurons_without_changing_output",
+          }
+          tests = " ".join(node_ids[number] for number in sorted(selected))
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"tests={tests}\n")
+
+          if selected:
+              print("Selected diagnostic issues:", ", ".join(map(str, sorted(selected))))
+          else:
+              print("No diagnostic issues referenced or affected; challenge tests skipped.")
+          PY
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Install project
+        run: uv sync --locked --dev
+
+      - name: Run complete test suite
+        if: steps.select-tests.outputs.tests != ''
+        run: uv run --frozen pytest -q ${{ steps.select-tests.outputs.tests }}
+
+      - name: No diagnostic tests required
+        if: steps.select-tests.outputs.tests == ''
+        run: echo "This PR does not affect a diagnostic challenge."
